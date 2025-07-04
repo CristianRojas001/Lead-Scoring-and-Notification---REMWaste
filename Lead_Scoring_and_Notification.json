@@ -1,950 +1,160 @@
-{
-  "name": "Lead Scoring and Notification",
-  "nodes": [
-    {
-      "parameters": {
-        "amount": 2,
-        "unit": "minutes"
-      },
-      "name": "Follow-Up Wait",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        580,
-        -100
-      ],
-      "id": "b8b22d1c-58e4-4a4f-8269-a9095452952c",
-      "webhookId": "ec8bfa75-5df9-4548-88a9-90ee673b4099"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Lead Validation and Scoring Script\n\n//Input data\n\n//For Testing    Comment out for production\nlet leadData = $items(\"TestingData\")[0].json;\n\n\n//For Production   -  Comment block out for testing\n /*\nlet leadData;\nif ($('FromForm - Production').first().json.body) {\n  leadData = $('FromForm - Production').first().json.body;\n} else if ($('FromForm - Production').first().json.data) {\n  leadData = $('FromForm - Production').first().json.data;\n} else {\n  leadData = $('FromForm - Production').first().json.body;\n}\n*/\n\n// 1. VALIDATION - Check required fields\nconst requiredFields = ['full_name', 'email', 'budget', 'interest_level'];\nconst missingFields = [];\n\nfor (const field of requiredFields) {\n  if (!leadData[field] || leadData[field].toString().trim() === '') {\n    missingFields.push(field);\n  }\n}\n\n// If validation fails, return error\nif (missingFields.length > 0) {\n  return [{\n    json: {\n      validation_error: true,\n      missing_fields: missingFields,\n      message: `Missing required fields: ${missingFields.join(', ')}`\n    }\n  }];\n}\n\n// 2. SCORING ALGORITHM\n// Extract and clean values\nconst budget = parseInt(leadData.budget) || 0;\nconst interestLevel = leadData.interest_level?.toLowerCase().trim() || '';\nconst companySize = leadData.company_size?.toLowerCase().trim() || '';\n\nlet score = 0;\nlet leadCategory = 'Cold';\n\n// Budget Scoring (0-40 points)\nif (budget >= 10000) {\n  score += 40;\n} else if (budget >= 5000) {\n  score += 25;\n} else if (budget >= 1000) {\n  score += 15;\n} else if (budget >= 500) {\n  score += 10;\n} else {\n  score += 5;\n}\n\n// Interest Level Scoring (0-30 points)\nswitch (interestLevel) {\n  case 'high':\n    score += 30;\n    break;\n  case 'medium':\n    score += 20;\n    break;\n  case 'low':\n    score += 10;\n    break;\n  default:\n    score += 5;\n}\n\n// Company Size Scoring (0-20 points)\nswitch (companySize) {\n  case 'enterprise':\n    score += 20;\n    break;\n  case 'large':\n    score += 15;\n    break;\n  case 'medium':\n    score += 10;\n    break;\n  case 'small':\n    score += 5;\n    break;\n  default:\n    score += 0;\n}\n\n// Additional scoring factors\n// Email domain scoring\nconst emailDomain = leadData.email?.split('@')[1]?.toLowerCase() || '';\nif (emailDomain && !['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com'].includes(emailDomain)) {\n  score += 5; // Business email bonus\n}\n\n// Phone number provided bonus\nif (leadData.phone && leadData.phone.trim() !== '') {\n  score += 5;\n}\n\n// 3. CATEGORIZATION\n// Determine lead category based on total score\nif (score >= 70) {\n  leadCategory = 'Hot';\n} else if (score >= 50) {\n  leadCategory = 'Warm';\n} else {\n  leadCategory = 'Cold';\n}\n\n// 4. PREPARE OUTPUT\n// Generate unique lead ID\nconst leadId = `LEAD_${Date.now()}_${Math.random().toString(36).substr(2, 5).toUpperCase()}`;\n\n// Create timestamp\nconst timestamp = new Date().toISOString();\n\n// Return enriched lead data\nreturn [{\n  json: {\n    // Original data\n    full_name: leadData.full_name,\n    email: leadData.email,\n    phone: leadData.phone || '',\n    company_size: leadData.company_size || '',\n    budget: budget,\n    interest_level: leadData.interest_level,\n    \n    // Calculated fields\n    lead_id: leadId,\n    lead_score: score,\n    lead_category: leadCategory,\n    scored_at: timestamp,\n    \n    // Scoring breakdown (for debugging/reporting)\n    score_breakdown: {\n      budget_score: budget >= 10000 ? 40 : budget >= 5000 ? 25 : budget >= 1000 ? 15 : budget >= 500 ? 10 : 5,\n      interest_score: interestLevel === 'high' ? 30 : interestLevel === 'medium' ? 20 : interestLevel === 'low' ? 10 : 5,\n      company_score: companySize === 'enterprise' ? 20 : companySize === 'large' ? 15 : companySize === 'medium' ? 10 : companySize === 'small' ? 5 : 0,\n      email_bonus: emailDomain && !['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com'].includes(emailDomain) ? 5 : 0,\n      phone_bonus: leadData.phone && leadData.phone.trim() !== '' ? 5 : 0\n    },\n    \n    // Validation status\n    validation_passed: true,\n    processed_at: timestamp\n  }\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -520,
-        0
-      ],
-      "id": "6c0b1fa6-363f-44c8-84dd-03f64fc47441",
-      "name": "Lead Validation and Scoring",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "operation": "create",
-        "base": {
-          "__rl": true,
-          "value": "appbV9Cc0YEHWTDZ6",
-          "mode": "list",
-          "cachedResultName": "Customer Feedback  (Responses)",
-          "cachedResultUrl": "https://airtable.com/appbV9Cc0YEHWTDZ6"
-        },
-        "table": {
-          "__rl": true,
-          "value": "tblDnObJXb4IQ8AaV",
-          "mode": "list",
-          "cachedResultName": "Form Responses 1",
-          "cachedResultUrl": "https://airtable.com/appbV9Cc0YEHWTDZ6/tblDnObJXb4IQ8AaV"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Error Log": "={{ $json.error }}",
-            "Timestamp": "={{ $now }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "Timestamp",
-              "displayName": "Timestamp",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Feedback Type",
-              "displayName": "Feedback Type",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "options",
-              "options": [
-                {
-                  "name": "Comments",
-                  "value": "Comments"
-                }
-              ],
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "Feedback",
-              "displayName": "Feedback",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "Error Log",
-              "displayName": "Error Log",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Name",
-              "displayName": "Name",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "Email",
-              "displayName": "Email",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {
-          "typecast": true
-        }
-      },
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [
-        -80,
-        100
-      ],
-      "id": "77278f51-4615-443a-9fb5-cf351d6f2da4",
-      "name": "ErrorLogging",
-      "credentials": {
-        "airtableTokenApi": {
-          "id": "3uyDU5FEE9yIMo3P",
-          "name": "Airtable Personal Access Token account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "9026ebaa-c38c-4f30-9a84-66903b8bc36f",
-              "leftValue": "={{$json.validation_error !== true && $json.error === undefined}}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "or"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        -300,
-        0
-      ],
-      "id": "bb5cad9a-23a2-4c9a-8e84-d2cc8ea2a74e",
-      "name": "IfValid"
-    },
-    {
-      "parameters": {
-        "operation": "create",
-        "base": {
-          "__rl": true,
-          "value": "appbV9Cc0YEHWTDZ6",
-          "mode": "list",
-          "cachedResultName": "Customer Feedback  (Responses)",
-          "cachedResultUrl": "https://airtable.com/appbV9Cc0YEHWTDZ6"
-        },
-        "table": {
-          "__rl": true,
-          "value": "tblDnObJXb4IQ8AaV",
-          "mode": "list",
-          "cachedResultName": "Form Responses 1",
-          "cachedResultUrl": "https://airtable.com/appbV9Cc0YEHWTDZ6/tblDnObJXb4IQ8AaV"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "Timestamp",
-              "displayName": "Timestamp",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Feedback Type",
-              "displayName": "Feedback Type",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "options",
-              "options": [
-                {
-                  "name": "Comments",
-                  "value": "Comments"
-                }
-              ],
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Feedback",
-              "displayName": "Feedback",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Suggestions for improvement",
-              "displayName": "Suggestions for improvement",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Name",
-              "displayName": "Name",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Email",
-              "displayName": "Email",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {
-          "typecast": true
-        }
-      },
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [
-        -740,
-        360
-      ],
-      "id": "1c4d7d23-31fb-4dda-aa27-593873fbc8bb",
-      "name": "ErrorLogging1",
-      "credentials": {
-        "airtableTokenApi": {
-          "id": "3uyDU5FEE9yIMo3P",
-          "name": "Airtable Personal Access Token account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "create",
-        "base": {
-          "__rl": true,
-          "value": "appbV9Cc0YEHWTDZ6",
-          "mode": "list",
-          "cachedResultName": "Leads Table",
-          "cachedResultUrl": "https://airtable.com/appbV9Cc0YEHWTDZ6"
-        },
-        "table": {
-          "__rl": true,
-          "value": "tbl5io0iWhMNpUQPp",
-          "mode": "list",
-          "cachedResultName": "Form Responses 2",
-          "cachedResultUrl": "https://airtable.com/appbV9Cc0YEHWTDZ6/tbl5io0iWhMNpUQPp"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Timestamp": "={{ $json.scored_at }}",
-            "budget": "={{ $json.budget }}",
-            "Lead Score": "={{ $json.lead_score }}",
-            "full_name": "={{ $json.full_name }}",
-            "Email": "={{ $json.email }}",
-            "Phone": "={{ $json.phone }}",
-            "company_size": "={{ $json.company_size }}",
-            "Interest Level": "={{ $json.interest_level }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "Timestamp",
-              "displayName": "Timestamp",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "full_name",
-              "displayName": "full_name",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Email",
-              "displayName": "Email",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Phone",
-              "displayName": "Phone",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "company_size",
-              "displayName": "company_size",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "budget",
-              "displayName": "budget",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Interest Level",
-              "displayName": "Interest Level",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Lead Score",
-              "displayName": "Lead Score",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Validation Pass",
-              "displayName": "Validation Pass",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {
-          "typecast": ""
-        }
-      },
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [
-        -80,
-        -100
-      ],
-      "id": "6f07d3bd-40d1-4bb4-96ef-ae83d3d77cb6",
-      "name": "StoreLead",
-      "credentials": {
-        "airtableTokenApi": {
-          "id": "3uyDU5FEE9yIMo3P",
-          "name": "Airtable Personal Access Token account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "select": "user",
-        "user": {
-          "__rl": true,
-          "value": "U08UZ8VG4TD",
-          "mode": "list",
-          "cachedResultName": "cristianjrojas"
-        },
-        "text": "=New Hot Lead:  {{ $json.fields.Email }} Budget  £{{ $json.fields.budget }},  Interest: {{ $json.fields['Interest Level'] }},  Score: {{ $json.fields['Lead Score'] }}, Check Airtable for details: https://airtable.com/appbV9Cc0YEHWTDZ6/tbl5io0iWhMNpUQPp/viw18m4t3qGUbsWlC?blocks=hide",
-        "otherOptions": {}
-      },
-      "type": "n8n-nodes-base.slack",
-      "typeVersion": 2.3,
-      "position": [
-        360,
-        -100
-      ],
-      "id": "925b73cb-6416-416f-adab-ce23733b55d0",
-      "name": "NotifyHot",
-      "webhookId": "dac4b63f-8671-4a5a-b6ea-a691a0e670de",
-      "credentials": {
-        "slackApi": {
-          "id": "39e9cSRc5ckQPIf4",
-          "name": "Slack account 5"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "select": "user",
-        "user": {
-          "__rl": true,
-          "value": "U08UZ8VG4TD",
-          "mode": "list",
-          "cachedResultName": "cristianjrojas"
-        },
-        "text": "=ollow-up: Checking in with {{$json.full_name}} ({{$json.email}}) after initial inquiry.\n\nRecord: https://airtable.com/appbV9Cc0YEHWTDZ6/tbl5io0iWhMNpUQPp/viw18m4t3qGUbsWlC?blocks=hide",
-        "otherOptions": {}
-      },
-      "type": "n8n-nodes-base.slack",
-      "typeVersion": 2.3,
-      "position": [
-        800,
-        -100
-      ],
-      "id": "7affa3f4-0f19-405b-9dce-2c631166b9bf",
-      "name": "Remainder",
-      "webhookId": "dac4b63f-8671-4a5a-b6ea-a691a0e670de",
-      "credentials": {
-        "slackApi": {
-          "id": "39e9cSRc5ckQPIf4",
-          "name": "Slack account 5"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{ $('Lead Validation and Scoring').item.json.lead_category }}",
-              "value2": "Hot"
-            }
-          ]
-        }
-      },
-      "name": "IsHot?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        140,
-        -100
-      ],
-      "id": "380178d1-9658-4bd4-9d99-6e43e26cd1ae"
-    },
-    {
-      "parameters": {},
-      "type": "n8n-nodes-base.errorTrigger",
-      "typeVersion": 1,
-      "position": [
-        -960,
-        360
-      ],
-      "id": "dab88b5f-0ff0-4d26-9d2a-0be5bf77328f",
-      "name": "ErrorTrigger"
-    },
-    {
-      "parameters": {
-        "select": "user",
-        "user": {
-          "__rl": true,
-          "value": "U08UZ8VG4TD",
-          "mode": "list",
-          "cachedResultName": "cristianjrojas"
-        },
-        "text": "=🚨 *Workflow Error\n\nWorkflow: {{ $('ErrorTrigger').item.json.workflow.name }}\nNode:* {{ $('ErrorTrigger').item.json.execution.lastNodeExecuted }}\nMessage: {{ $('ErrorTrigger').item.json.execution.error.message }}\n",
-        "otherOptions": {}
-      },
-      "type": "n8n-nodes-base.slack",
-      "typeVersion": 2.3,
-      "position": [
-        -520,
-        360
-      ],
-      "id": "5c1b3076-8fec-49ba-9f16-f17ade3bc0f1",
-      "name": "Remainder1",
-      "webhookId": "dac4b63f-8671-4a5a-b6ea-a691a0e670de",
-      "credentials": {
-        "slackApi": {
-          "id": "39e9cSRc5ckQPIf4",
-          "name": "Slack account 5"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Simulate a marketing‐form submission (8 variants, some broken)\nconst names   = ['Alice','Bob','Carol','Dave'];\nconst levels  = ['High','Medium','Low'];\nconst sizes   = ['small','medium','large','enterprise'];\nconst budgets = [  500, 1500, 6000, 12000];\n\n// Pick a variant 0–7\nconst variant = Math.floor(Math.random() * 8);\n\nlet lead;\nswitch (variant) {\n  case 0:\n    // Valid lead #1\n    lead = {\n      full_name:       'Alice Test',\n      email:           'alice@example.com',\n      phone:           '+1234567890',\n      company_size:    'small',\n      budget:          500,\n      interest_level:  'Low',\n    };\n    break;\n  case 1:\n    // Valid lead #2\n    lead = {\n      full_name:       'Bob Test',\n      email:           'bob@example.com',\n      phone:           '+1234567890',\n      company_size:    'medium',\n      budget:          1500,\n      interest_level:  'Medium',\n    };\n    break;\n  case 2:\n    // Valid lead #3\n    lead = {\n      full_name:       'Carol Test',\n      email:           'carol@example.com',\n      phone:           '+1234567890',\n      company_size:    'large',\n      budget:          6000,\n      interest_level:  'High',\n    };\n    break;\n  case 3:\n    // Valid lead #4 (enterprise)\n    lead = {\n      full_name:       'Dave Test',\n      email:           'dave@example.com',\n      phone:           '+1234567890',\n      company_size:    'enterprise',\n      budget:          12000,\n      interest_level:  'High',\n    };\n    break;\n  case 4:\n    // **ERROR case**: company_size as number → toLowerCase() will throw\n    lead = {\n      full_name:       'Error Case',\n      email:           'error@example.com',\n      phone:           '+1234567890',\n      company_size:    100,           // <-- wrong type\n      budget:          500,\n      interest_level:  'Low',\n    };\n    break;\n  case 5:\n    // **ERROR case**: missing email → validation should catch this\n    lead = {\n      full_name:       'No Email',\n      // email missing\n      phone:           '+1234567890',\n      company_size:    'medium',\n      budget:          1500,\n      interest_level:  'Medium',\n    };\n    break;\n  case 6:\n    // **ERROR case**: budget as formatted string → parseInt may fail\n    lead = {\n      full_name:       'Bad Budget',\n      email:           'badbudget@example.com',\n      phone:           '+1234567890',\n      company_size:    'large',\n      budget:          '£5,000',      // <-- formatted string\n      interest_level:  'High',\n    };\n    break;\n  case 7:\n    // Edge case: interest level in unexpected casing / missing\n    lead = {\n      full_name:       'Weird Interest',\n      email:           'weird@example.com',\n      phone:           '+1234567890',\n      company_size:    'small',\n      budget:          800,\n      interest_level:  '',            // <-- empty string\n    };\n    break;\n  default:\n    // fallback valid\n    lead = {\n      full_name:       'Fallback Test',\n      email:           'fallback@example.com',\n      phone:           '+1234567890',\n      company_size:    'medium',\n      budget:          1000,\n      interest_level:  'Low',\n    };\n}\n\nreturn [{ json: lead }];\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -740,
-        -100
-      ],
-      "id": "e39b79cd-26fa-4ae4-ba1d-24c4647b9b00",
-      "name": "TestingData"
-    },
-    {
-      "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "minutes",
-              "minutesInterval": 1
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        -960,
-        -100
-      ],
-      "id": "2f91391d-2829-4551-92d9-a0a9829b4d03",
-      "name": "Schedule Trigger"
-    },
-    {
-      "parameters": {
-        "content": "## For testing only\n**Dummy data + Error generating data",
-        "height": 260,
-        "width": 420
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1010,
-        -200
-      ],
-      "id": "1aa440f9-fe20-4a9c-a9cc-e85ad13347e5",
-      "name": "Sticky Note"
-    },
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "lead-submit",
-        "options": {}
-      },
-      "name": "FromForm - Production",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [
-        -960,
-        100
-      ],
-      "id": "274eda4a-2df4-4a7b-8494-fbff2f70bf44",
-      "webhookId": "0e7b7feb-434f-4040-a560-9a5d255a37d8",
-      "disabled": true
-    },
-    {
-      "parameters": {
-        "operation": "create",
-        "base": {
-          "__rl": true,
-          "value": "appbV9Cc0YEHWTDZ6",
-          "mode": "list",
-          "cachedResultName": "Leads Table",
-          "cachedResultUrl": "https://airtable.com/appbV9Cc0YEHWTDZ6"
-        },
-        "table": {
-          "__rl": true,
-          "value": "tbleOk12BO9EqijWf",
-          "mode": "list",
-          "cachedResultName": "RawData",
-          "cachedResultUrl": "https://airtable.com/appbV9Cc0YEHWTDZ6/tbleOk12BO9EqijWf"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Timestamp": "={{ $now }}",
-            "RawData": "={{ $json.body ? JSON.stringify($json.body) : '' }}\n"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "Timestamp",
-              "displayName": "Timestamp",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "full_name",
-              "displayName": "full_name",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "Email",
-              "displayName": "Email",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "Phone",
-              "displayName": "Phone",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "company_size",
-              "displayName": "company_size",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "budget",
-              "displayName": "budget",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "Interest Level",
-              "displayName": "Interest Level",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "Lead Score",
-              "displayName": "Lead Score",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "Validation Pass",
-              "displayName": "Validation Pass",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "RawData",
-              "displayName": "RawData",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {
-          "typecast": ""
-        }
-      },
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [
-        -740,
-        100
-      ],
-      "id": "b5d062dd-a60d-4c31-adf4-83864006c9f3",
-      "name": "RawDataBackUP",
-      "credentials": {
-        "airtableTokenApi": {
-          "id": "3uyDU5FEE9yIMo3P",
-          "name": "Airtable Personal Access Token account"
-        }
-      }
+// Lead Validation and Scoring Script
+
+//For Testing    Comment out for production
+//let leadData = $items("TestingData")[0].json;
+
+//For Production   -  Comment block out for testing
+const leadData = $('FromForm - Production').first().json.body.data;
+const fields = leadData.fields;
+
+// Extract values from fields array - fix the field mapping
+const data = {
+  full_name: fields[0].value,
+  email: fields[1].value,
+  phone: fields[2].value,
+  company_size: fields[3].options && fields[3].value ? 
+    fields[3].options.find(opt => opt.id === fields[3].value[0])?.text : 
+    fields[3].value,
+  budget: fields[4].value,
+  interest_level: fields[5] ? (fields[5].options && fields[5].value ? 
+    fields[5].options.find(opt => opt.id === fields[5].value[0])?.text : 
+    fields[5].value) : ''
+};
+
+// Validate required fields
+const requiredFields = ['full_name', 'email', 'budget', 'interest_level'];
+const missingFields = requiredFields.filter(field => !data[field] || data[field].toString().trim() === '');
+
+// If validation fails, return error
+if (missingFields.length > 0) {
+  return [{
+    json: {
+      validation_error: true,
+      missing_fields: missingFields,
+      message: `Missing required fields: ${missingFields.join(', ')}`
     }
-  ],
-  "pinData": {},
-  "connections": {
-    "Follow-Up Wait": {
-      "main": [
-        [
-          {
-            "node": "Remainder",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Lead Validation and Scoring": {
-      "main": [
-        [
-          {
-            "node": "IfValid",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        []
-      ]
-    },
-    "IfValid": {
-      "main": [
-        [
-          {
-            "node": "StoreLead",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "ErrorLogging",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "StoreLead": {
-      "main": [
-        [
-          {
-            "node": "IsHot?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "NotifyHot": {
-      "main": [
-        [
-          {
-            "node": "Follow-Up Wait",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "IsHot?": {
-      "main": [
-        [
-          {
-            "node": "NotifyHot",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "ErrorTrigger": {
-      "main": [
-        [
-          {
-            "node": "ErrorLogging1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "ErrorLogging1": {
-      "main": [
-        [
-          {
-            "node": "Remainder1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "TestingData": {
-      "main": [
-        [
-          {
-            "node": "Lead Validation and Scoring",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Schedule Trigger": {
-      "main": [
-        [
-          {
-            "node": "TestingData",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "FromForm - Production": {
-      "main": [
-        [
-          {
-            "node": "RawDataBackUP",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "RawDataBackUP": {
-      "main": [
-        [
-          {
-            "node": "Lead Validation and Scoring",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
-  "active": false,
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "versionId": "023275a4-6bf6-4f58-862d-9336620cfa65",
-  "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "6552087cf0b11b57fb371fc42d904baceb47323a60869dea3c766dca388ef8e2"
-  },
-  "id": "jn132Q5UFSWkTeB8",
-  "tags": []
+  }];
 }
+
+// 2. SCORING ALGORITHM
+// Extract and clean values
+const budget = parseInt(data.budget) || 0;
+const interestLevel = data.interest_level ? data.interest_level.toString().toLowerCase().trim() : '';
+const companySize = data.company_size ? data.company_size.toString().toLowerCase().trim() : '';
+
+let score = 0;
+let leadCategory = 'Cold';
+
+// Budget Scoring (0-40 points)
+if (budget >= 50000) {
+  score += 40;
+} else if (budget >= 20000) {
+  score += 35;
+} else if (budget >= 10000) {
+  score += 30;
+} else if (budget >= 5000) {
+  score += 25;
+} else if (budget >= 1000) {
+  score += 15;
+} else if (budget >= 500) {
+  score += 10;
+} else if (budget > 0) {
+  score += 5;
+}
+
+// Interest Level Scoring (0-30 points)
+switch (interestLevel) {
+  case 'high':
+    score += 30;
+    break;
+  case 'medium':
+    score += 20;
+    break;
+  case 'low':
+    score += 10;
+    break;
+  default:
+    score += 0;
+}
+
+// Company Size Scoring (0-20 points)
+switch (companySize) {
+  case 'enterprise':
+  case 'large':
+    score += 20;
+    break;
+  case 'medium':
+    score += 15;
+    break;
+  case 'small':
+    score += 10;
+    break;
+  case 'startup':
+    score += 5;
+    break;
+  default:
+    score += 0;
+}
+
+// Additional scoring factors
+// Email domain scoring (0-5 points)
+const emailDomain = data.email ? data.email.split('@')[1]?.toLowerCase() : '';
+if (emailDomain && !['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com'].includes(emailDomain)) {
+  score += 5; // Business email bonus
+}
+
+// Phone number provided bonus (0-5 points)
+if (data.phone && data.phone.toString().trim() !== '') {
+  score += 5;
+}
+
+// 3. CATEGORIZATION
+// Determine lead category based on total score
+if (score >= 80) {
+  leadCategory = 'Hot';
+} else if (score >= 60) {
+  leadCategory = 'Warm';
+} else if (score >= 40) {
+  leadCategory = 'Qualified';
+} else {
+  leadCategory = 'Cold';
+}
+
+// 4. PREPARE OUTPUT
+// Generate unique lead ID
+const leadId = `LEAD_${Date.now()}_${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+
+// Create timestamp
+const timestamp = new Date().toISOString();
+
+// Return enriched lead data
+return [{
+  json: {
+    // Original data
+    full_name: data.full_name,
+    email: data.email,
+    phone: data.phone || '',
+    company_size: data.company_size || '',
+    budget: budget,
+    interest_level: data.interest_level,
+    
+    // Calculated fields
+    lead_id: leadId,
+    lead_score: score,
+    lead_category: leadCategory,
+    scored_at: timestamp,
+    
+    // Scoring breakdown (for debugging/reporting)
+    score_breakdown: {
+      budget_score: budget >= 50000 ? 40 : budget >= 20000 ? 35 : budget >= 10000 ? 30 : budget >= 5000 ? 25 : budget >= 1000 ? 15 : budget >= 500 ? 10 : budget > 0 ? 5 : 0,
+      interest_score: interestLevel === 'high' ? 30 : interestLevel === 'medium' ? 20 : interestLevel === 'low' ? 10 : 0,
+      company_score: ['enterprise', 'large'].includes(companySize) ? 20 : companySize === 'medium' ? 15 : companySize === 'small' ? 10 : companySize === 'startup' ? 5 : 0,
+      email_bonus: emailDomain && !['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com'].includes(emailDomain) ? 5 : 0,
+      phone_bonus: data.phone && data.phone.toString().trim() !== '' ? 5 : 0
+    },
+    
+    // Validation status
+    validation_passed: true,
+    processed_at: timestamp
+  }
+}];
