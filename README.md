@@ -1,6 +1,8 @@
 🎯 Lead Scoring & Notification Automation System
 An intelligent n8n workflow that automates lead qualification, scoring, and team notifications for improved sales efficiency.
 
+
+
 🚀 Overview
 This n8n automation workflow transforms manual lead qualification into an intelligent, real-time system that:
 
